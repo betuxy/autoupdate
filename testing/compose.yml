@@ -1,0 +1,50 @@
+---
+services:
+  icinga-master:
+    build: ./icinga-master
+    container_name: icinga-master
+    hostname: icinga-master
+    ports:
+      - "5665:5665"
+    networks:
+      - icinga-test
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -sk
+        - -u
+        - "autoupdate:Pain-Frequently-Mother-Sun3-Instead"
+        - "https://localhost:5665/v1/status"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  agent1:
+    build: ./icinga-agent
+    container_name: agent1
+    hostname: agent1
+    ports:
+      - "2222:22"
+    networks:
+      - icinga-test
+    restart: always
+    volumes:
+      - ./keys/ansible_ed25519.pub:/tmp/ansible_key.pub:ro
+
+  agent2:
+    build: ./icinga-agent
+    container_name: agent2
+    hostname: agent2
+    ports:
+      - "2223:22"
+    networks:
+      - icinga-test
+    restart: always
+    volumes:
+      - ./keys/ansible_ed25519.pub:/tmp/ansible_key.pub:ro
+
+networks:
+  icinga-test:
+    driver: bridge

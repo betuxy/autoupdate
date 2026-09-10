@@ -1,0 +1,41 @@
+---
+# Reset the apt service back to OK on test agents.
+#
+# Usage:
+#   ansible-playbook -i testing/inventory.yml testing/clear-critical.yml
+#   ansible-playbook -i testing/inventory.yml testing/clear-critical.yml -e "sim_hosts=agent1"
+#
+- name: Test | Clear CRITICAL apt service state on agents
+  hosts: localhost
+  gather_facts: false
+  vars:
+    icinga_api_url: "https://localhost:5665"
+    icinga_api_user: "autoupdate"
+    icinga_api_password: "Pain-Frequently-Mother-Sun3-Instead"
+    icinga_api_validate_certs: false
+    _target_hosts: "{{ (sim_hosts | default('agent1,agent2')).split(',') }}"
+
+  tasks:
+    - name: Test | Set apt service to OK on {{ item }}
+      ansible.builtin.uri:
+        url: "{{ icinga_api_url }}/v1/actions/process-check-result"
+        method: POST
+        user: "{{ icinga_api_user }}"
+        password: "{{ icinga_api_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ icinga_api_validate_certs }}"
+        headers:
+          Accept: application/json
+        body_format: json
+        body:
+          type: Service
+          filter: 'host.name == "{{ item }}" && service.name == "apt"'
+          exit_status: 0
+          plugin_output: "OK: System is up to date."
+          check_source: "ansible-simulate"
+        status_code: 200
+      loop: "{{ _target_hosts }}"
+
+    - name: Test | Confirm services cleared
+      ansible.builtin.debug:
+        msg: "apt service reset to OK on: {{ _target_hosts | join(', ') }}"

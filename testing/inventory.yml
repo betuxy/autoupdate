@@ -1,0 +1,16 @@
+---
+all:
+  vars:
+    ansible_user: ansible
+    ansible_ssh_private_key_file: "{{ playbook_dir }}/testing/keys/ansible_ed25519"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    # PID 1 start-time changes on each container restart → reliable reboot detection in Docker.
+    # On real hosts remove this override so the default boot_id method is used.
+    autoupdate_boot_time_command: "awk '{print $22}' /proc/1/stat"
+  hosts:
+    agent1:
+      ansible_host: localhost
+      ansible_port: 2222
+    agent2:
+      ansible_host: localhost
+      ansible_port: 2223

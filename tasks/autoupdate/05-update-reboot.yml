@@ -70,6 +70,7 @@
     reboot_timeout: "{{ autoupdate_reboot_timeout }}"
     msg: Rebooting for system updates
     pre_reboot_delay: "{{ autoupdate_pre_reboot_delay }}"
+    boot_time_command: "{{ autoupdate_boot_time_command | default(omit) }}"
   become: true
 
 - name: 05-update-reboot | Log host back online

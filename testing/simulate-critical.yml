@@ -1,0 +1,43 @@
+---
+# Set the apt service to CRITICAL on one or both test agents.
+#
+# Usage:
+#   ansible-playbook -i testing/inventory.yml testing/simulate-critical.yml
+#   ansible-playbook -i testing/inventory.yml testing/simulate-critical.yml -e "sim_hosts=agent1"
+#
+- name: Test | Simulate CRITICAL apt service state on agents
+  hosts: localhost
+  gather_facts: false
+  vars:
+    icinga_api_url: "https://localhost:5665"
+    icinga_api_user: "autoupdate"
+    icinga_api_password: "Pain-Frequently-Mother-Sun3-Instead"
+    icinga_api_validate_certs: false
+    _target_hosts: "{{ (sim_hosts | default('agent1,agent2')).split(',') }}"
+
+  tasks:
+    - name: Test | Set apt service to CRITICAL on {{ item }}
+      ansible.builtin.uri:
+        url: "{{ icinga_api_url }}/v1/actions/process-check-result"
+        method: POST
+        user: "{{ icinga_api_user }}"
+        password: "{{ icinga_api_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ icinga_api_validate_certs }}"
+        headers:
+          Accept: application/json
+        body_format: json
+        body:
+          type: Service
+          filter: 'host.name == "{{ item }}" && service.name == "apt"'
+          exit_status: 2
+          plugin_output: >-
+            CRITICAL: 5 packages available for upgrade (2 critical updates).
+            Run 'apt-get upgrade' to see details.
+          check_source: "ansible-simulate"
+        status_code: 200
+      loop: "{{ _target_hosts }}"
+
+    - name: Test | Confirm CRITICAL services
+      ansible.builtin.debug:
+        msg: "apt service set to CRITICAL on: {{ _target_hosts | join(', ') }}"
