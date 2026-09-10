@@ -1,0 +1,43 @@
+---
+- name: Autoupdate | Gather hosts needing update from Icinga
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Autoupdate | Query Icinga for critical apt/needrestart services
+      ansible.builtin.import_tasks: tasks/autoupdate/01-query-icinga.yml
+
+- name: Autoupdate | Verify host reachability
+  hosts: needs_update
+  gather_facts: false
+  ignore_unreachable: true
+
+  tasks:
+    - name: Autoupdate | Check SSH reachability
+      ansible.builtin.import_tasks: tasks/autoupdate/02-check-reachability.yml
+
+- name: Autoupdate | Report unreachable hosts and finalize update queue
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Autoupdate | Report unreachable hosts
+      ansible.builtin.import_tasks: tasks/autoupdate/03-report-unreachable.yml
+
+- name: Autoupdate | Update and reboot hosts
+  hosts: reachable_for_update
+  gather_facts: false
+  serial: 1
+
+  tasks:
+    - name: Autoupdate | Schedule Icinga downtime
+      ansible.builtin.import_tasks: tasks/autoupdate/04-set-downtime.yml
+
+    - name: Autoupdate | Run apt upgrade and reboot
+      ansible.builtin.import_tasks: tasks/autoupdate/05-update-reboot.yml
+
+    - name: Autoupdate | Verify monitoring recovery
+      ansible.builtin.import_tasks: tasks/autoupdate/06-check-recovery.yml
+
+    - name: Autoupdate | Remove Icinga downtime
+      ansible.builtin.import_tasks: tasks/autoupdate/07-remove-downtime.yml

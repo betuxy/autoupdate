@@ -1,0 +1,41 @@
+---
+# Runs once on localhost to capture the full host list before any host
+# is marked unreachable and removed from ansible_play_hosts.
+- name: 02-check-reachability | Record all hosts being attempted
+  ansible.builtin.set_fact:
+    _attempted_hosts: "{{ ansible_play_hosts_all }}"
+  delegate_to: localhost
+  run_once: true
+  check_mode: false
+
+- name: 02-check-reachability | Log reachability check attempt
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | Checking SSH reachability"
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: 02-check-reachability | Test SSH connection
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ autoupdate_reachability_timeout }}"
+    sleep: 2
+    delay: 0
+  check_mode: false
+
+- name: 02-check-reachability | Add reachable host to update queue
+  ansible.builtin.add_host:
+    name: "{{ inventory_hostname }}"
+    groups: reachable_for_update
+  changed_when: false
+  check_mode: false
+
+- name: 02-check-reachability | Log host confirmed reachable
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | REACHABLE - queued for update"
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode

@@ -1,0 +1,38 @@
+---
+- name: 03-report-unreachable | Compute unreachable hosts
+  ansible.builtin.set_fact:
+    _unreachable_hosts: >-
+      {{
+        _attempted_hosts | default([])
+        | difference(groups['reachable_for_update'] | default([]))
+      }}
+
+- name: 03-report-unreachable | Log each unreachable host
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ item }} | UNREACHABLE - skipped"
+    create: true
+    mode: '0640'
+  loop: "{{ _unreachable_hosts }}"
+  when: not ansible_check_mode
+
+- name: 03-report-unreachable | Warn about unreachable hosts
+  ansible.builtin.debug:
+    msg: |-
+      WARNING: the following hosts could not be reached and will be skipped:
+        {{ _unreachable_hosts | join('\n  ') }}
+  when: _unreachable_hosts | length > 0
+
+- name: 03-report-unreachable | Log final update queue
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: >-
+      {{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | localhost |
+      Update queue: {{ groups['reachable_for_update'] | default([]) | join(', ') or 'none' }}
+    create: true
+    mode: '0640'
+  when: not ansible_check_mode
+
+- name: 03-report-unreachable | Display update queue
+  ansible.builtin.debug:
+    msg: "Hosts queued for update: {{ groups['reachable_for_update'] | default([]) | join(', ') or 'none' }}"

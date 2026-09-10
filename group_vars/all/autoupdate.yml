@@ -1,0 +1,32 @@
+---
+# Icinga2 API connection — store icinga_api_password in vault
+icinga_api_url: "https://localhost:5665"
+icinga_api_user: autoupdate
+icinga_api_password: "Pain-Frequently-Mother-Sun3-Instead"
+icinga_api_validate_certs: false
+
+# Set to true to suppress API credentials from logs
+icinga_api_no_log: false
+
+# Downtime scheduling
+icinga_downtime_duration: 7200
+icinga_downtime_author: ansible
+icinga_downtime_comment: "Automated update and reboot by autoupdate playbook"
+
+# Reachability check
+autoupdate_reachability_timeout: 10
+
+# Update and reboot behaviour
+autoupdate_pre_reboot_delay: 5
+autoupdate_reboot_timeout: 600
+
+# Seconds to wait after forcing Icinga rechecks before starting the recovery poll.
+# Should be long enough for the check engine to execute all service checks.
+autoupdate_recheck_delay: 30
+
+# Recovery polling: retries * delay = max wait in seconds (default: 30 * 60 = 30 min)
+autoupdate_recovery_retries: 30
+autoupdate_recovery_delay: 60
+
+# Log file — appended to on every run
+autoupdate_log_path: "{{ playbook_dir }}/logs/autoupdate.log"

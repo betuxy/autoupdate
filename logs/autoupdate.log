@@ -1,0 +1,28 @@
+2026-09-10T21:29:31Z | localhost | Autoupdate run started
+2026-09-10T21:29:32Z | localhost | Icinga CRITICAL hosts: hv01.box, wg.x7hd.de
+2026-09-10T21:29:33Z | hv01.box | Checking SSH reachability
+2026-09-10T21:29:33Z | wg.x7hd.de | Checking SSH reachability
+2026-09-10T21:29:47Z | wg.x7hd.de | REACHABLE - queued for update
+2026-09-10T21:29:47Z | localhost | Update queue: wg.x7hd.de
+2026-09-10T21:29:47Z | wg.x7hd.de | Scheduling Icinga downtime
+2026-09-10T21:29:49Z | wg.x7hd.de | Icinga downtime scheduled (1 objects)
+2026-09-10T21:29:50Z | wg.x7hd.de | Starting apt full-upgrade
+2026-09-10T21:30:05Z | wg.x7hd.de | Rebooting
+2026-09-10T21:30:29Z | wg.x7hd.de | Back online after reboot
+2026-09-10T21:30:29Z | wg.x7hd.de | Polling Icinga for service recovery
+2026-09-10T21:40:03Z | localhost | Autoupdate run started
+2026-09-10T21:40:04Z | localhost | Icinga CRITICAL hosts: hv01.box, wg.x7hd.de
+2026-09-10T21:40:05Z | hv01.box | Checking SSH reachability
+2026-09-10T21:40:05Z | wg.x7hd.de | Checking SSH reachability
+2026-09-10T21:40:19Z | wg.x7hd.de | REACHABLE - queued for update
+2026-09-10T21:40:19Z | localhost | Update queue: wg.x7hd.de
+2026-09-10T21:40:20Z | wg.x7hd.de | Scheduling Icinga downtime
+2026-09-10T21:40:21Z | wg.x7hd.de | Icinga downtime scheduled (1 objects)
+2026-09-10T21:40:21Z | wg.x7hd.de | Starting apt full-upgrade
+2026-09-10T21:40:27Z | wg.x7hd.de | Rebooting
+2026-09-10T21:40:50Z | wg.x7hd.de | Back online after reboot
+2026-09-10T21:40:50Z | wg.x7hd.de | Polling Icinga for service recovery
+2026-09-10T21:46:56Z | wg.x7hd.de | All services recovered
+2026-09-10T21:52:17Z | localhost | Autoupdate run started
+2026-09-10T21:52:19Z | localhost | Icinga CRITICAL hosts: hv01.box
+2026-09-10T21:52:20Z | hv01.box | Checking SSH reachability

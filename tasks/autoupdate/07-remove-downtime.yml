@@ -1,0 +1,35 @@
+---
+- name: 07-remove-downtime | Remove all downtimes for host from Icinga
+  ansible.builtin.uri:
+    url: "{{ icinga_api_url }}/v1/actions/remove-downtime"
+    method: POST
+    user: "{{ icinga_api_user }}"
+    password: "{{ icinga_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ icinga_api_validate_certs }}"
+    headers:
+      Accept: application/json
+    body_format: json
+    body:
+      type: Downtime
+      filter: >-
+        downtime.host_name == "{{ inventory_hostname }}" &&
+        downtime.author == "{{ icinga_downtime_author }}"
+    status_code: 200
+  delegate_to: localhost
+  no_log: "{{ icinga_api_no_log }}"
+  when: not ansible_check_mode
+
+- name: 07-remove-downtime | Log downtime removed and update complete
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | Downtime removed - update complete"
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: 07-remove-downtime | Confirm downtime removed for host
+  ansible.builtin.debug:
+    msg: "Downtime removed for {{ inventory_hostname }} - update complete"
+  when: not ansible_check_mode

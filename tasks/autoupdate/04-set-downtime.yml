@@ -1,0 +1,55 @@
+---
+- name: 04-set-downtime | Log scheduling downtime
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | Scheduling Icinga downtime"
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: 04-set-downtime | Calculate downtime window timestamps
+  ansible.builtin.set_fact:
+    _downtime_start: "{{ now(utc=True).strftime('%s') | int }}"
+    _downtime_end: "{{ now(utc=True).strftime('%s') | int + icinga_downtime_duration }}"
+
+- name: 04-set-downtime | Schedule host and service downtime in Icinga
+  ansible.builtin.uri:
+    url: "{{ icinga_api_url }}/v1/actions/schedule-downtime"
+    method: POST
+    user: "{{ icinga_api_user }}"
+    password: "{{ icinga_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ icinga_api_validate_certs }}"
+    headers:
+      Accept: application/json
+    body_format: json
+    body:
+      type: Host
+      filter: 'host.name == "{{ inventory_hostname }}"'
+      start_time: "{{ _downtime_start }}"
+      end_time: "{{ _downtime_end }}"
+      author: "{{ icinga_downtime_author }}"
+      comment: "{{ icinga_downtime_comment }}"
+      all_services: true
+    status_code: 200
+  register: _downtime_result
+  delegate_to: localhost
+  no_log: "{{ icinga_api_no_log }}"
+  when: not ansible_check_mode
+
+- name: 04-set-downtime | Log downtime scheduled
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: >-
+      {{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} |
+      Icinga downtime scheduled ({{ _downtime_result.json.results | length }} objects)
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: 04-set-downtime | Confirm downtime was scheduled
+  ansible.builtin.debug:
+    msg: "Scheduled {{ _downtime_result.json.results | length }} downtime(s) for {{ inventory_hostname }}"
+  when: not ansible_check_mode

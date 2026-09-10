@@ -1,0 +1,97 @@
+---
+- name: 06-check-recovery | Log starting recovery poll
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | Polling Icinga for service recovery"
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: 06-check-recovery | Force recheck of host in Icinga
+  ansible.builtin.uri:
+    url: "{{ icinga_api_url }}/v1/actions/reschedule-check"
+    method: POST
+    user: "{{ icinga_api_user }}"
+    password: "{{ icinga_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ icinga_api_validate_certs }}"
+    headers:
+      Accept: application/json
+    body_format: json
+    body:
+      type: Host
+      filter: 'host.name == "{{ inventory_hostname }}"'
+      force_check: true
+    status_code: 200
+  delegate_to: localhost
+  no_log: "{{ icinga_api_no_log }}"
+  when: not ansible_check_mode
+
+- name: 06-check-recovery | Force recheck of all services in Icinga
+  ansible.builtin.uri:
+    url: "{{ icinga_api_url }}/v1/actions/reschedule-check"
+    method: POST
+    user: "{{ icinga_api_user }}"
+    password: "{{ icinga_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ icinga_api_validate_certs }}"
+    headers:
+      Accept: application/json
+    body_format: json
+    body:
+      type: Service
+      filter: 'host.name == "{{ inventory_hostname }}"'
+      force_check: true
+    status_code: 200
+  delegate_to: localhost
+  no_log: "{{ icinga_api_no_log }}"
+  when: not ansible_check_mode
+
+- name: 06-check-recovery | Wait for check results to arrive
+  ansible.builtin.pause:
+    seconds: "{{ autoupdate_recheck_delay }}"
+  when: not ansible_check_mode
+
+- name: 06-check-recovery | Poll Icinga until no CRITICAL services remain for host
+  ansible.builtin.uri:
+    url: "{{ icinga_api_url }}/v1/objects/services"
+    method: POST
+    user: "{{ icinga_api_user }}"
+    password: "{{ icinga_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ icinga_api_validate_certs }}"
+    headers:
+      Accept: application/json
+      X-HTTP-Method-Override: GET
+    body_format: json
+    body:
+      filter: >-
+        host.name == "{{ inventory_hostname }}" &&
+        service.state == 2 &&
+        !service.in_downtime
+    status_code: 200
+  register: _recovery_check
+  until: >-
+    not (_recovery_check.failed | default(true))
+    and 'results' in (_recovery_check.json | default({}))
+    and _recovery_check.json.results | length == 0
+  retries: "{{ autoupdate_recovery_retries }}"
+  delay: "{{ autoupdate_recovery_delay }}"
+  delegate_to: localhost
+  no_log: "{{ icinga_api_no_log }}"
+  when: not ansible_check_mode
+
+- name: 06-check-recovery | Log recovery confirmed
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | All services recovered"
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: 06-check-recovery | Confirm all services recovered
+  ansible.builtin.debug:
+    msg: "All services recovered on {{ inventory_hostname }}"
+  when: not ansible_check_mode

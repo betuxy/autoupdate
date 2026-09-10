@@ -1,0 +1,82 @@
+---
+- name: 05-update-reboot | Log starting apt upgrade
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | Starting apt full-upgrade"
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: 05-update-reboot | Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  check_mode: false
+
+- name: 05-update-reboot | Simulate upgrade to show pending packages  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: apt-get --simulate dist-upgrade
+  register: _apt_simulate
+  changed_when: false
+  become: true
+  check_mode: false
+
+# Reformat each "Inst" line into "package old -> new".
+# Upgrade lines:  Inst libssl3 [3.0.2-1] (3.0.2-2 Ubuntu:... [amd64])  → libssl3 3.0.2-1 -> 3.0.2-2
+# New-install:    Inst curl (7.81.0-2 Ubuntu:... [amd64])                → curl (new) -> 7.81.0-2
+- name: 05-update-reboot | Build package changelog from simulate output
+  ansible.builtin.set_fact:
+    _pkg_changelog: >-
+      {{
+        _apt_simulate.stdout_lines
+        | select('match', '^Inst ')
+        | map('regex_replace', '^Inst (\S+) \[([^\]]+)\] \((\S+).*', '\1 \2 -> \3')
+        | map('regex_replace', '^Inst (\S+) \((\S+).*', '\1 (new) -> \2')
+        | list
+      }}
+
+- name: 05-update-reboot | Show package changelog
+  ansible.builtin.debug:
+    msg: "{{ _pkg_changelog }}"
+
+- name: 05-update-reboot | Log each package change
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | PKG {{ item }}"
+    create: true
+    mode: '0640'
+  loop: "{{ _pkg_changelog }}"
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: 05-update-reboot | Run apt full-upgrade
+  ansible.builtin.apt:
+    upgrade: full
+  become: true
+
+- name: 05-update-reboot | Log rebooting
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | Rebooting"
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: 05-update-reboot | Reboot host
+  ansible.builtin.reboot:
+    reboot_timeout: "{{ autoupdate_reboot_timeout }}"
+    msg: Rebooting for system updates
+    pre_reboot_delay: "{{ autoupdate_pre_reboot_delay }}"
+  become: true
+
+- name: 05-update-reboot | Log host back online
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | {{ inventory_hostname }} | Back online after reboot"
+    create: true
+    mode: '0640'
+  delegate_to: localhost
+  when: not ansible_check_mode

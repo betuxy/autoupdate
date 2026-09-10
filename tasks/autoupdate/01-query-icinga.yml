@@ -1,0 +1,67 @@
+---
+- name: 01-query-icinga | Ensure log directory exists
+  ansible.builtin.file:
+    path: "{{ autoupdate_log_path | dirname }}"
+    state: directory
+    mode: '0755'
+  when: not ansible_check_mode
+
+- name: 01-query-icinga | Log autoupdate run started
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | localhost | Autoupdate run started"
+    create: true
+    mode: '0640'
+  when: not ansible_check_mode
+
+- name: 01-query-icinga | Query Icinga API for hosts with apt or needrestart in CRITICAL
+  ansible.builtin.uri:
+    url: "{{ icinga_api_url }}/v1/objects/services"
+    method: POST
+    user: "{{ icinga_api_user }}"
+    password: "{{ icinga_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ icinga_api_validate_certs }}"
+    headers:
+      Accept: application/json
+      X-HTTP-Method-Override: GET
+    body_format: json
+    body:
+      filter: >-
+        service.state == 2 &&
+        (service.name == "apt" || service.name == "needrestart")
+    status_code: 200
+  register: _icinga_services
+  check_mode: false
+  no_log: "{{ icinga_api_no_log }}"
+
+- name: 01-query-icinga | Extract unique hostnames from Icinga response
+  ansible.builtin.set_fact:
+    _needs_update_hosts: >-
+      {{
+        _icinga_services.json.results
+        | map(attribute='attrs.host_name')
+        | unique
+        | list
+      }}
+  check_mode: false
+
+- name: 01-query-icinga | Report hosts requiring update
+  ansible.builtin.debug:
+    msg: "Hosts with apt/needrestart CRITICAL: {{ _needs_update_hosts | join(', ') or 'none' }}"
+
+- name: 01-query-icinga | Log identified hosts
+  ansible.builtin.lineinfile:
+    path: "{{ autoupdate_log_path }}"
+    line: "{{ now(utc=True).strftime('%Y-%m-%dT%H:%M:%SZ') }} | localhost | Icinga CRITICAL hosts: {{ _needs_update_hosts | join(', ') or 'none' }}"
+    create: true
+    mode: '0640'
+  when: not ansible_check_mode
+
+- name: 01-query-icinga | Add qualifying hosts to needs_update group
+  ansible.builtin.add_host:
+    name: "{{ item }}"
+    groups: needs_update
+  loop: "{{ _needs_update_hosts }}"
+  changed_when: false
+  check_mode: false
