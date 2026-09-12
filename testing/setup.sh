@@ -37,7 +37,7 @@ if $RESET; then
     bash "$SCRIPT_DIR/teardown.sh" --volumes
 fi
 
-REQUIRED_PORTS=(5665 2222 2223)
+REQUIRED_PORTS=(5665 8080 2222 2223)
 PORT_ERRORS=0
 for port in "${REQUIRED_PORTS[@]}"; do
     if ss -tlnH "sport = :$port" 2>/dev/null | grep -q .; then
