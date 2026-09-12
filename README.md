@@ -240,3 +240,139 @@ Maximum recovery wait = `autoupdate_recheck_delay + autoupdate_recovery_retries 
 | Variable | Default | Description |
 |---|---|---|
 | `autoupdate_log_path` | `{{ playbook_dir }}/logs/autoupdate.log` | Path to the append-only log file |
+
+---
+
+## Test environment
+
+A self-contained Podman environment for end-to-end testing without a real Icinga2 installation.
+
+### Services
+
+| Container | Image | Port | Purpose |
+|---|---|---|---|
+| `icinga-master` | `icinga/icinga2` | 5665 | Icinga2 API |
+| `icingaweb2` | `icinga/icingaweb2` | 8080 | Web console |
+| `redis` | `redis:7-alpine` | — | IcingaDB backend |
+| `icingadb` | `icinga/icingadb` | — | IcingaDB bridge |
+| `mariadb` | `mariadb:10.11` | — | Persistent storage |
+| `agent1` | custom Ubuntu 24.04 | 2222 | SSH update target |
+| `agent2` | custom Ubuntu 24.04 | 2223 | SSH update target |
+
+Agent containers have an `ansible` user with passwordless sudo. `/sbin/reboot` is overridden to
+`kill 1` so `ansible.builtin.reboot` works — the `restart: always` policy brings the container
+back up automatically.
+
+### Quick start
+
+```bash
+# Start (builds images only if not cached)
+bash testing/setup.sh
+
+# Force rebuild of agent image
+bash testing/setup.sh --build
+
+# Wipe everything and start fresh
+bash testing/setup.sh --reset
+```
+
+IcingaWeb2 is at **http://localhost:8080** — log in with `icingaadmin` / `icinga`.
+
+### Simulate CRITICAL states
+
+```bash
+# Push apt + needrestart to CRITICAL on both agents
+ansible-playbook -i testing/inventory.yml testing/simulate-critical.yml
+
+# Target a single host
+ansible-playbook -i testing/inventory.yml -e 'sim_hosts=agent1' testing/simulate-critical.yml
+
+# Clear back to OK
+ansible-playbook -i testing/inventory.yml testing/clear-critical.yml
+```
+
+### Run the playbook against the test environment
+
+```bash
+source ansible-venv/bin/activate
+ansible-playbook -i testing/inventory.yml autoupdate.yml
+ansible-playbook -i testing/inventory.yml --check autoupdate.yml
+ansible-playbook -i testing/inventory.yml -l agent1 autoupdate.yml
+```
+
+### Teardown
+
+```bash
+bash testing/teardown.sh              # stop and remove containers
+bash testing/teardown.sh --volumes    # also remove named volumes (Icinga PKI / MariaDB data)
+bash testing/teardown.sh --keys       # also delete the generated SSH key pair
+bash testing/teardown.sh --all        # everything above
+```
+
+---
+
+## i2 — Icinga2 CLI
+
+`testing/i2.py` is a standalone Icinga2 API CLI with no external dependencies (pure stdlib).
+
+### Install
+
+```bash
+python3 testing/i2.py install
+```
+
+Copies the script to the first writable directory in `PATH` (prefers `~/.local/bin`).
+If the target directory is not in `PATH`, the command prints the export line to add.
+
+### Commands
+
+```
+i2 hosts                                         # list all hosts
+i2 hosts --state DOWN                            # filter by state
+i2 hosts --filter 'host.vars.env == "prod"'      # raw Icinga2 filter
+
+i2 services                                      # list all services
+i2 services --host web01 --state CRITICAL
+i2 services --name "apt"                         # wildcards supported
+
+i2 downtime schedule --host web01 --duration 3600 --comment "Maintenance"
+i2 downtime list
+i2 downtime list --host web01
+i2 downtime remove --host web01
+
+i2 recheck --host web01
+i2 recheck --host web01 --service apt
+
+i2 report                                        # state counts + unhandled problems
+```
+
+### Global flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--url URL` | `https://localhost:5665` | API base URL (`ICINGA_URL`) |
+| `--user USER` | `root` | API username (`ICINGA_USER`) |
+| `--password PASS` | prompted | API password (`ICINGA_PASSWORD`) |
+| `--no-verify` | off | Skip TLS certificate verification |
+| `--json` | off | Emit JSON instead of a table |
+| `--debug` | off | Debug logging with stack traces |
+| `--log-file FILE` | stderr | Write JSON logs to file |
+
+Environment variables in parentheses override the corresponding flag.
+Global flags must appear **before** the subcommand name.
+
+### Shell completions
+
+```bash
+# Bash — add to ~/.bashrc
+eval "$(i2 completions bash)"
+
+# Zsh — add to ~/.zshrc
+eval "$(i2 completions zsh)"
+
+# Fish — install permanently
+i2 completions fish > ~/.config/fish/completions/i2.fish
+
+# Xonsh — add to ~/.xonshrc
+exec($(i2 completions xonsh))
+```
