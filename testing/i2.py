@@ -267,7 +267,7 @@ def cmd_services(client: Icinga2Client, args, log: logging.Logger):
             "service": a.get("name", r.get("name", "")),
             "state":   _state(a.get("state", -1), SERVICE_STATES),
             "checked": _fmt_ts(lcr.get("execution_end")),
-            "output":  _trunc(lcr.get("output", ""), 60),
+            "output":  lcr.get("output", "") if args.max_output == 0 else _trunc(lcr.get("output", ""), args.max_output),
             "ack":     "✓" if a.get("acknowledgement") else "",
             "dt":      f"({a['downtime_depth']})" if a.get("downtime_depth") else "",
         })
@@ -520,7 +520,7 @@ _i2_complete() {
         services)
             case "$prev" in
                 --state) COMPREPLY=($(compgen -W "OK WARNING CRITICAL UNKNOWN" -- "$cur")) ;;
-                *)       COMPREPLY=($(compgen -W "--host --name --state --filter --help" -- "$cur")) ;;
+                *)       COMPREPLY=($(compgen -W "--host --name --state --filter --max-output --help" -- "$cur")) ;;
             esac ;;
         downtime)
             if [[ -z "$dt_cmd" ]]; then
@@ -598,6 +598,7 @@ _i2() {
                         '--name=[Filter by service name]:name:' \
                         '--state=[Service state]:state:(OK WARNING CRITICAL UNKNOWN)' \
                         '--filter=[Raw Icinga2 filter expression]:expression:' \
+                        '--max-output=[Truncate plugin output to N chars; 0=no limit]:chars:' \
                         '(- :)--help[Show help]' ;;
                 downtime)
                     local context state line
@@ -686,10 +687,11 @@ complete -c i2 -n "__fish_seen_subcommand_from hosts" -l state  -d 'Host state' 
 complete -c i2 -n "__fish_seen_subcommand_from hosts" -l filter -d 'Raw Icinga2 filter expression' -r
 
 # services options
-complete -c i2 -n "__fish_seen_subcommand_from services" -l host   -d 'Filter by host name'            -r
-complete -c i2 -n "__fish_seen_subcommand_from services" -l name   -d 'Filter by service name'          -r
-complete -c i2 -n "__fish_seen_subcommand_from services" -l state  -d 'Service state'                  -r -a 'OK WARNING CRITICAL UNKNOWN'
-complete -c i2 -n "__fish_seen_subcommand_from services" -l filter -d 'Raw Icinga2 filter expression'   -r
+complete -c i2 -n "__fish_seen_subcommand_from services" -l host       -d 'Filter by host name'                      -r
+complete -c i2 -n "__fish_seen_subcommand_from services" -l name       -d 'Filter by service name'                    -r
+complete -c i2 -n "__fish_seen_subcommand_from services" -l state      -d 'Service state'                             -r -a 'OK WARNING CRITICAL UNKNOWN'
+complete -c i2 -n "__fish_seen_subcommand_from services" -l filter     -d 'Raw Icinga2 filter expression'              -r
+complete -c i2 -n "__fish_seen_subcommand_from services" -l max-output -d 'Truncate plugin output to N chars; 0=no limit' -r
 
 # downtime subcommands
 complete -c i2 -n "__fish_seen_subcommand_from downtime; and not __fish_seen_subcommand_from $dt_cmds" -a schedule -d 'Schedule a downtime'
@@ -765,7 +767,7 @@ def _i2_completer(prefix, line, begidx, endidx, ctx):
     if cmd == 'services':
         if last == '--state':
             return {s for s in ('OK', 'WARNING', 'CRITICAL', 'UNKNOWN') if s.startswith(prefix)}
-        return {o for o in ('--host', '--name', '--state', '--filter', '--help') if o.startswith(prefix)}
+        return {o for o in ('--host', '--name', '--state', '--filter', '--max-output', '--help') if o.startswith(prefix)}
 
     if cmd == 'downtime':
         if dt_cmd is None:
@@ -951,10 +953,12 @@ def _build_parser() -> argparse.ArgumentParser:
                               i2 services --host web01 --name apt
                               i2 services --filter 'service.state >= 1 && !service.acknowledgement'
                         """))
-    ps.add_argument("--host",   help="Filter by host name")
-    ps.add_argument("--name",   help="Filter by service name (wildcards supported)")
-    ps.add_argument("--state",  metavar="STATE", help="OK | WARNING | CRITICAL | UNKNOWN")
-    ps.add_argument("--filter", metavar="EXPR",  help="Raw Icinga2 filter expression")
+    ps.add_argument("--host",        help="Filter by host name")
+    ps.add_argument("--name",        help="Filter by service name (wildcards supported)")
+    ps.add_argument("--state",       metavar="STATE", help="OK | WARNING | CRITICAL | UNKNOWN")
+    ps.add_argument("--filter",      metavar="EXPR",  help="Raw Icinga2 filter expression")
+    ps.add_argument("--max-output",  metavar="N", type=int, default=60,
+                    help="Truncate plugin output to N chars; 0 = no limit (default: 60)")
 
     # downtime
     pd = sub.add_parser("downtime", help="Schedule, remove, or list downtimes")

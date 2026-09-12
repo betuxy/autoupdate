@@ -334,6 +334,8 @@ i2 hosts --filter 'host.vars.env == "prod"'      # raw Icinga2 filter
 i2 services                                      # list all services
 i2 services --host web01 --state CRITICAL
 i2 services --name "apt"                         # wildcards supported
+i2 services --max-output 0                       # full plugin output, no truncation
+i2 services --max-output 120                     # wider truncation
 
 i2 downtime schedule --host web01 --duration 3600 --comment "Maintenance"
 i2 downtime list
@@ -353,13 +355,27 @@ i2 report                                        # state counts + unhandled prob
 | `--url URL` | `https://localhost:5665` | API base URL (`ICINGA_URL`) |
 | `--user USER` | `root` | API username (`ICINGA_USER`) |
 | `--password PASS` | prompted | API password (`ICINGA_PASSWORD`) |
-| `--no-verify` | off | Skip TLS certificate verification |
+| `-k`, `--no-verify` | off | Skip TLS certificate verification |
 | `--json` | off | Emit JSON instead of a table |
 | `--debug` | off | Debug logging with stack traces |
-| `--log-file FILE` | stderr | Write JSON logs to file |
+| `--log-file FILE` | `~/.local/share/i2/i2.log` | Log file path |
+| `--log-console` | off | Also print JSON logs to stderr |
 
 Environment variables in parentheses override the corresponding flag.
 Global flags must appear **before** the subcommand name.
+
+Logs are written as JSON to `~/.local/share/i2/i2.log` by default, rotating at 50 MB (one
+backup kept). Pass `--log-console` to mirror them to stderr, e.g. for interactive debugging.
+
+### `services` flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--host HOST` | — | Filter by host name |
+| `--name NAME` | — | Filter by service name (wildcards: `apt`, `check_*`) |
+| `--state STATE` | — | `OK` \| `WARNING` \| `CRITICAL` \| `UNKNOWN` |
+| `--filter EXPR` | — | Raw Icinga2 filter expression |
+| `--max-output N` | `60` | Truncate plugin output to N chars; `0` = no limit |
 
 ### Shell completions
 
