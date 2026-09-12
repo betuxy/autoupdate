@@ -17,6 +17,7 @@ import base64
 import getpass
 import json
 import logging
+import logging.handlers
 import os
 import shutil
 import ssl
@@ -52,12 +53,27 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(entry)
 
 
-def _setup_logging(debug: bool, log_file: str | None) -> logging.Logger:
+_DEFAULT_LOG   = os.path.expanduser("~/.local/share/i2/i2.log")
+_LOG_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def _setup_logging(debug: bool, log_file: str, console: bool) -> logging.Logger:
     log = logging.getLogger("i2")
     log.setLevel(logging.DEBUG if debug else logging.INFO)
-    handler = logging.FileHandler(log_file) if log_file else logging.StreamHandler(sys.stderr)
-    handler.setFormatter(_JsonFormatter())
-    log.addHandler(handler)
+    fmt = _JsonFormatter()
+
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    fh = logging.handlers.RotatingFileHandler(
+        log_file, maxBytes=_LOG_MAX_BYTES, backupCount=1, encoding="utf-8",
+    )
+    fh.setFormatter(fmt)
+    log.addHandler(fh)
+
+    if console:
+        ch = logging.StreamHandler(sys.stderr)
+        ch.setFormatter(fmt)
+        log.addHandler(ch)
+
     return log
 
 
@@ -469,6 +485,7 @@ _i2_complete() {
     # Walk tokens to find the subcommand (skip option values)
     local cmd="" dt_cmd="" skip_next=0
     local -a vflags=(--url --user --password --log-file)
+    # --log-console is a boolean flag, not included in vflags
     local i w vo
     for ((i = 1; i < cword; i++)); do
         w="${COMP_WORDS[i]}"
@@ -488,7 +505,7 @@ _i2_complete() {
         "")
             if [[ "$cur" == -* ]]; then
                 COMPREPLY=($(compgen -W \
-                    "--url --user --password --no-verify --json --debug --log-file --help" \
+                    "--url --user --password --no-verify -k --json --debug --log-file --log-console --help" \
                     -- "$cur"))
             else
                 COMPREPLY=($(compgen -W \
@@ -543,10 +560,11 @@ _i2() {
         '--url=[API base URL]:url:'
         '--user=[API username]:user:'
         '--password=[API password]:password:'
-        '--no-verify[Skip TLS certificate verification]'
+        '(-k --no-verify)'{-k,--no-verify}'[Skip TLS certificate verification]'
         '--json[Emit JSON instead of a table]'
         '--debug[Enable debug logging]'
         '--log-file=[Write JSON logs to file]:log file:_files'
+        '--log-console[Also print JSON logs to stderr]'
         '(- :)'{-h,--help}'[Show help and exit]'
     )
 
@@ -648,10 +666,11 @@ complete -c i2 -f
 complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -l url       -d 'API base URL'                       -r
 complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -l user      -d 'API username'                       -r
 complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -l password  -d 'API password'                       -r
-complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -l no-verify -d 'Skip TLS certificate verification'
+complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -s k -l no-verify -d 'Skip TLS certificate verification'
 complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -l json      -d 'Emit JSON instead of a table'
 complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -l debug     -d 'Enable debug logging'
-complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -l log-file  -d 'Write JSON logs to file'            -r
+complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -l log-file    -d 'Write JSON logs to file'    -r
+complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -l log-console -d 'Also print JSON logs to stderr'
 
 # Subcommands
 complete -c i2 -n "not __fish_seen_subcommand_from $i2_cmds" -a hosts       -d 'List hosts'
@@ -733,8 +752,8 @@ def _i2_completer(prefix, line, begidx, endidx, ctx):
 
     if cmd is None:
         if prefix.startswith('-'):
-            opts = {'--url', '--user', '--password', '--no-verify',
-                    '--json', '--debug', '--log-file', '--help'}
+            opts = {'--url', '--user', '--password', '--no-verify', '-k',
+                    '--json', '--debug', '--log-file', '--log-console', '--help'}
             return {o for o in opts if o.startswith(prefix)}
         return {c for c in commands if c.startswith(prefix)}
 
@@ -888,13 +907,16 @@ def _build_parser() -> argparse.ArgumentParser:
                    metavar="USER", help="API username (default: root)")
     g.add_argument("--password",  default=os.getenv("ICINGA_PASSWORD"),
                    metavar="PASS", help="API password (prompted if omitted)")
-    g.add_argument("--no-verify", action="store_true",
+    g.add_argument("-k", "--no-verify", action="store_true",
                    help="Skip TLS certificate verification")
 
     o = p.add_argument_group("output")
-    o.add_argument("--json",     action="store_true", help="Emit JSON instead of a table")
-    o.add_argument("--debug",    action="store_true", help="Debug logging with stack traces")
-    o.add_argument("--log-file", metavar="FILE",      help="Write JSON logs to FILE (default: stderr)")
+    o.add_argument("--json",        action="store_true", help="Emit JSON instead of a table")
+    o.add_argument("--debug",       action="store_true", help="Debug logging with stack traces")
+    o.add_argument("--log-file",    metavar="FILE",      default=_DEFAULT_LOG,
+                   help="Log file path (default: ~/.local/share/i2/i2.log)")
+    o.add_argument("--log-console", action="store_true",
+                   help="Also print JSON logs to stderr")
 
     sub = p.add_subparsers(dest="command", metavar="command")
     sub.required = False
@@ -1025,8 +1047,6 @@ def main():
         parser.print_help()
         sys.exit(0)
 
-    log = _setup_logging(args.debug, args.log_file)
-
     if args.command == "install":
         cmd_install(args)
         return
@@ -1034,6 +1054,8 @@ def main():
     if args.command == "completions":
         cmd_completions(args)
         return
+
+    log = _setup_logging(args.debug, args.log_file, args.log_console)
 
     password = args.password
     if not password:
