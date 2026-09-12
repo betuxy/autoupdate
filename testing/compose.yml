@@ -1,11 +1,17 @@
 ---
 services:
   icinga-master:
-    build: ./icinga-master
+    image: icinga/icinga2
     container_name: icinga-master
     hostname: icinga-master
     ports:
       - "5665:5665"
+    environment:
+      ICINGA_MASTER: "1"
+    volumes:
+      - icinga-master-data:/data
+      - ./icinga-master/conf/autoupdate-user.conf:/data/etc/icinga2/conf.d/autoupdate-user.conf:ro
+      - ./icinga-master/conf/hosts.conf:/data/etc/icinga2/conf.d/hosts.conf:ro
     networks:
       - icinga-test
     healthcheck:
@@ -44,6 +50,9 @@ services:
     restart: always
     volumes:
       - ./keys/ansible_ed25519.pub:/tmp/ansible_key.pub:ro
+
+volumes:
+  icinga-master-data:
 
 networks:
   icinga-test:

@@ -1,12 +1,55 @@
 #!/bin/bash
 # Bootstrap the test environment.
-# Run from the project root:  bash testing/setup.sh
+# Run from the project root:  bash testing/setup.sh [--build|-b] [--reset|-r]
+#   --build|-b   force rebuild of container images even if already cached
+#   --reset|-r   tear down existing environment first (passes --volumes to teardown)
 set -e
+
+FORCE_BUILD=false
+RESET=false
+for arg in "$@"; do
+    case "$arg" in
+        --build|-b) FORCE_BUILD=true ;;
+        --reset|-r) RESET=true ;;
+        *) echo "Unknown argument: $arg" >&2; exit 1 ;;
+    esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KEY_DIR="$SCRIPT_DIR/keys"
 
 echo "=== Autoupdate playbook — test environment setup ==="
+
+# Preflight checks
+if ! command -v podman &>/dev/null; then
+    echo "ERROR: podman is not installed or not in PATH." >&2
+    exit 1
+fi
+if ! podman compose version &>/dev/null; then
+    echo "ERROR: podman-compose provider not found." >&2
+    echo "Install it with:  pip install podman-compose" >&2
+    echo "             or:  sudo apt install podman-compose" >&2
+    exit 1
+fi
+
+if $RESET; then
+    echo "Resetting existing environment..."
+    bash "$SCRIPT_DIR/teardown.sh" --volumes
+fi
+
+REQUIRED_PORTS=(5665 2222 2223)
+PORT_ERRORS=0
+for port in "${REQUIRED_PORTS[@]}"; do
+    if ss -tlnH "sport = :$port" 2>/dev/null | grep -q .; then
+        echo "ERROR: port $port is already in use." >&2
+        PORT_ERRORS=$((PORT_ERRORS + 1))
+    fi
+done
+if [ "$PORT_ERRORS" -gt 0 ]; then
+    echo "Free the ports above and re-run, or stop existing containers with:" >&2
+    echo "  cd testing && podman compose down" >&2
+    exit 1
+fi
 
 # 1. Generate SSH key pair for Ansible → agent access
 mkdir -p "$KEY_DIR"
@@ -18,9 +61,14 @@ else
 fi
 
 # 2. Build and start containers
-echo "[2/3] Building and starting containers (this may take a few minutes)..."
 cd "$SCRIPT_DIR"
-podman compose up -d --build
+if $FORCE_BUILD; then
+    echo "[2/3] Building and starting containers (forced rebuild)..."
+    podman compose up -d --build
+else
+    echo "[2/3] Starting containers (building images only if not cached)..."
+    podman compose up -d
+fi
 
 # 3. Wait for Icinga2 API to become healthy
 echo "[3/3] Waiting for Icinga2 API to be ready..."
