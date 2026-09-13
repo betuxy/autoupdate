@@ -937,11 +937,12 @@ def _build_parser() -> argparse.ArgumentParser:
                               i2 hosts --state DOWN
                               i2 hosts --filter 'host.address == "10.0.0.1"'
                         """))
-    ph.add_argument("--state",  metavar="STATE", help="UP | DOWN | UNREACHABLE")
+    ph.add_argument("-s", "--state",  metavar="STATE", help="UP | DOWN | UNREACHABLE")
     ph.add_argument("--filter", metavar="EXPR",  help="Raw Icinga2 filter expression")
 
     # services
     ps = sub.add_parser("services", help="List services",
+                        conflict_handler="resolve",
                         formatter_class=argparse.RawDescriptionHelpFormatter,
                         description=textwrap.dedent("""\
                             List services, with optional filters.
@@ -953,9 +954,9 @@ def _build_parser() -> argparse.ArgumentParser:
                               i2 services --host web01 --name apt
                               i2 services --filter 'service.state >= 1 && !service.acknowledgement'
                         """))
-    ps.add_argument("--host",        help="Filter by host name")
-    ps.add_argument("--name",        help="Filter by service name (wildcards supported)")
-    ps.add_argument("--state",       metavar="STATE", help="OK | WARNING | CRITICAL | UNKNOWN")
+    ps.add_argument("-h", "--host",        help="Filter by host name")
+    ps.add_argument("--name",              help="Filter by service name (wildcards supported)")
+    ps.add_argument("-s", "--state",       metavar="STATE", help="OK | WARNING | CRITICAL | UNKNOWN")
     ps.add_argument("--filter",      metavar="EXPR",  help="Raw Icinga2 filter expression")
     ps.add_argument("--max-output",  metavar="N", type=int, default=60,
                     help="Truncate plugin output to N chars; 0 = no limit (default: 60)")
@@ -966,6 +967,7 @@ def _build_parser() -> argparse.ArgumentParser:
     dtsub.required = True
 
     pds = dtsub.add_parser("schedule", help="Schedule a downtime",
+                           conflict_handler="resolve",
                            formatter_class=argparse.RawDescriptionHelpFormatter,
                            description=textwrap.dedent("""\
                                Schedule a downtime on a host and all its services.
@@ -975,7 +977,7 @@ def _build_parser() -> argparse.ArgumentParser:
                                  i2 downtime schedule --host web01 --duration 3600
                                  i2 downtime schedule --host web01 --service apt --duration 600
                            """))
-    pds.add_argument("--host",     required=True)
+    pds.add_argument("-h", "--host",     required=True)
     pds.add_argument("--service",  help="Service name (default: host + all services)")
     pds.add_argument("--duration", type=int, default=7200, metavar="SECS",
                      help="Duration in seconds (default: 7200 = 2 h)")
@@ -983,15 +985,18 @@ def _build_parser() -> argparse.ArgumentParser:
     pds.add_argument("--author",   default=os.getenv("USER", "i2-cli"),
                      help="Author name (default: $USER)")
 
-    pdr = dtsub.add_parser("remove", help="Remove downtimes for a host")
-    pdr.add_argument("--host",   required=True)
+    pdr = dtsub.add_parser("remove", help="Remove downtimes for a host",
+                           conflict_handler="resolve")
+    pdr.add_argument("-h", "--host",   required=True)
     pdr.add_argument("--author", help="Only remove downtimes by this author")
 
-    pdl = dtsub.add_parser("list", help="List active downtimes")
-    pdl.add_argument("--host", help="Filter by host name")
+    pdl = dtsub.add_parser("list", help="List active downtimes",
+                           conflict_handler="resolve")
+    pdl.add_argument("-h", "--host", help="Filter by host name")
 
     # recheck
     pr = sub.add_parser("recheck", help="Trigger an immediate forced check",
+                        conflict_handler="resolve",
                         formatter_class=argparse.RawDescriptionHelpFormatter,
                         description=textwrap.dedent("""\
                             Force Icinga2 to run a check immediately, bypassing the normal
@@ -1001,7 +1006,7 @@ def _build_parser() -> argparse.ArgumentParser:
                               i2 recheck --host web01
                               i2 recheck --host web01 --service apt
                         """))
-    pr.add_argument("--host",    required=True)
+    pr.add_argument("-h", "--host",    required=True)
     pr.add_argument("--service", help="Service name (default: recheck the host)")
 
     # report
