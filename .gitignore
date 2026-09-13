@@ -1,4 +1,4 @@
 ansible-venv/
-logs/
+logs/*
 testing/keys/
 .vault_pass
