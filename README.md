@@ -134,6 +134,50 @@ has gone down and no host dependency is defined. The playbook would then attempt
 a host that is actually unreachable. Play 2 catches this by probing SSH directly — if the
 connection times out, the host is logged as unreachable and excluded from the update queue.
 
+## Container-aware reboots
+
+`ansible.builtin.reboot` works by running a reboot command, waiting for SSH to drop and
+come back, then comparing the output of `boot_time_command` before and after — if it
+changed, a real reboot happened. Both halves of this break inside containers.
+
+**The boot-time problem.** The default `boot_time_command` reads
+`/proc/sys/kernel/random/boot_id`. Containers share the host kernel, so this file never
+changes across a container restart. Ansible waits, SSH returns, reads the same boot ID,
+and fails — even though the container actually restarted.
+
+**The reboot command problem.** Real `reboot(2)` syscalls are blocked or meaningless inside
+most container runtimes.
+
+### Detection
+
+Three independent signals are checked; any one is enough to mark the target as a container:
+
+| Signal | How |
+|---|---|
+| `systemd-detect-virt --container` | Exits 0 for Docker, containerd, Podman, LXC, nspawn. Most reliable cross-runtime check. |
+| `ansible_facts.virtualization_type` | Used if facts were gathered and already identify the runtime. |
+| `/proc/1/cgroup` | Fallback when `systemd-detect-virt` is absent — the cgroup hierarchy of PID 1 contains strings like `docker`, `containerd`, `kubepods`, or `lxc` inside a container. |
+
+All three use `failed_when: false` so a missing binary or file doesn't abort the play.
+
+### What changes on a container target
+
+| | VM (default) | Container |
+|---|---|---|
+| `reboot_command` | OS default (`reboot`) | `systemctl reboot \|\| (kill -TERM 1; sleep 1; kill -KILL 1)` |
+| `boot_time_command` | `/proc/sys/kernel/random/boot_id` | `stat -c %Y /proc/1` |
+
+**Reboot command:** tries `systemctl reboot` first (works if the container runs systemd as
+PID 1), then falls back to sending SIGTERM then SIGKILL to PID 1. This causes the container
+process to exit; the runtime's `restart: always` policy brings it back up.
+
+**Boot-time command:** `stat -c %Y /proc/1` returns the modification timestamp of PID 1 in
+the container's own namespace. A fresh PID 1 is spawned on each restart, so this value
+actually changes — giving Ansible the signal it needs to confirm the container came back.
+
+User-supplied `autoupdate_reboot_command` / `autoupdate_boot_time_command` always take
+precedence; the container fallbacks only apply when those variables are unset.
+
 ## Log file
 
 Every significant event is appended to `autoupdate_log_path` (default:
