@@ -246,49 +246,76 @@ Maximum recovery wait = `autoupdate_recheck_delay + autoupdate_recovery_retries 
 ## Test environment
 
 A self-contained Podman environment for end-to-end testing without a real Icinga2 installation.
+Agents are real Icinga2 satellite agents with SSL/PKI certificates, running systemd, and
+executing actual `check_apt` and `check_needrestart` plugins — the same checks the autoupdate
+playbook acts on.
 
 ### Services
 
 | Container | Image | Port | Purpose |
 |---|---|---|---|
-| `icinga-master` | `icinga/icinga2` | 5665 | Icinga2 API |
+| `icinga-master` | `icinga/icinga2` | 5665 | Icinga2 master + API |
 | `icingaweb2` | `icinga/icingaweb2` | 8080 | Web console |
 | `redis` | `redis:7-alpine` | — | IcingaDB backend |
 | `icingadb` | `icinga/icingadb` | — | IcingaDB bridge |
 | `mariadb` | `mariadb:10.11` | — | Persistent storage |
-| `agent1` | custom Ubuntu 24.04 | 2222 | SSH update target |
-| `agent2` | custom Ubuntu 24.04 | 2223 | SSH update target |
+| `agent1` | custom Debian 13 | 2222 (SSH), 2224 (Icinga2) | Real Icinga2 agent |
+| `agent2` | custom Debian 13 | 2223 (SSH), 2225 (Icinga2) | Real Icinga2 agent |
 
-Agent containers have an `ansible` user with passwordless sudo. `/sbin/reboot` is overridden to
-`kill 1` so `ansible.builtin.reboot` works — the `restart: always` policy brings the container
-back up automatically.
+Each agent container runs systemd as PID 1 and hosts:
+- **Icinga2** in satellite mode, TLS-authenticated to the master via PKI certificates
+- **`check_apt`** (from `nagios-plugins-basic`) — detects pending package upgrades
+- **`check_needrestart`** — detects services/kernel requiring a restart after upgrades
+- **OpenSSH** — Ansible connects via the generated key pair
+- **`ansible` user** with passwordless sudo for updates and reboots
+
+`/sbin/reboot` is overridden to `kill 1` so `ansible.builtin.reboot` works — the
+`restart: always` policy brings the container back up automatically, simulating a real reboot.
 
 ### Quick start
 
+`setup.sh` runs in four steps:
+
+1. Generate an SSH key pair (`testing/keys/ansible_ed25519`)
+2. Start the master and supporting services; wait for the Icinga2 API to become healthy
+3. Generate a per-agent PKI ticket via `icinga2 pki ticket`
+4. Start agent containers — they call `icinga2 node setup` on first boot using the ticket
+
 ```bash
-# Start (builds images only if not cached)
+# Start (builds agent image only if not cached)
 bash testing/setup.sh
 
 # Force rebuild of agent image
 bash testing/setup.sh --build
 
-# Wipe everything and start fresh
-bash testing/setup.sh --reset
+# Wipe everything and start fresh (removes named volumes)
+bash testing/setup.sh --reset --build
 ```
+
+Allow ~30 s after agents start for them to connect to the master and appear as UP in Icinga.
 
 IcingaWeb2 is at **http://localhost:8080** — log in with `icingaadmin` / `icinga`.
 
-### Simulate CRITICAL states
+### Check service states
 
 ```bash
-# Push apt + needrestart to CRITICAL on both agents
-ansible-playbook -i testing/inventory.yml testing/simulate-critical.yml
+# Requires i2 CLI (python3 testing/i2.py install)
+i2 -k services
 
-# Target a single host
-ansible-playbook -i testing/inventory.yml -e 'sim_hosts=agent1' testing/simulate-critical.yml
+# Full plugin output (shows what apt/needrestart actually found)
+i2 -k services --max-output 0
+```
 
-# Clear back to OK
-ansible-playbook -i testing/inventory.yml testing/clear-critical.yml
+Services run real checks against the container's actual package state. Install packages inside
+an agent to trigger a real CRITICAL, or upgrade/reboot to clear it:
+
+```bash
+# SSH into an agent and install something with known pending upgrades
+ssh -p 2222 -i testing/keys/ansible_ed25519 ansible@localhost
+
+# Or force Icinga to recheck immediately
+i2 -k recheck --host agent1 --service apt
+i2 -k recheck --host agent1 --service needrestart
 ```
 
 ### Run the playbook against the test environment

@@ -1,0 +1,31 @@
+#!/bin/bash
+# Icinga check: report services and kernel that need restart after package upgrades.
+# Runs needrestart in batch mode and parses its machine-readable output.
+# Must run as root (or via sudo from nagios) to inspect running processes.
+
+output=$(sudo needrestart -b 2>&1)
+rc=$?
+
+if [ $rc -ne 0 ] && [ -z "$output" ]; then
+    echo "UNKNOWN - needrestart exited $rc with no output"
+    exit 3
+fi
+
+services=$(printf '%s\n' "$output" | grep -c '^NEEDRESTART-SVC:' || true)
+kernel_sta=$(printf '%s\n' "$output" | awk '/^NEEDRESTART-KSTA:/{print $2}')
+kernel_sta=${kernel_sta:-1}
+
+issues=()
+svc_list=$(printf '%s\n' "$output" | awk '/^NEEDRESTART-SVC:/{print $2}' | tr '\n' ' ' | sed 's/ $//')
+
+[ "$services" -gt 0 ]    && issues+=("${services} service(s) need restart: ${svc_list}")
+[ "$kernel_sta" = "3" ]  && issues+=("kernel $(uname -r) → reboot required")
+[ "$kernel_sta" = "2" ]  && issues+=("kernel ABI updated (reboot recommended)")
+
+if [ "${#issues[@]}" -gt 0 ]; then
+    ( IFS='; '; echo "CRITICAL - ${issues[*]}" )
+    exit 2
+fi
+
+echo "OK - No restarts needed"
+exit 0

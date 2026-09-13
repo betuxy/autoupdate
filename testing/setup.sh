@@ -37,7 +37,7 @@ if $RESET; then
     bash "$SCRIPT_DIR/teardown.sh" --volumes
 fi
 
-REQUIRED_PORTS=(5665 8080 2222 2223)
+REQUIRED_PORTS=(5665 8080 2222 2223 2224 2225)
 PORT_ERRORS=0
 for port in "${REQUIRED_PORTS[@]}"; do
     if ss -tlnH "sport = :$port" 2>/dev/null | grep -q .; then
@@ -51,27 +51,28 @@ if [ "$PORT_ERRORS" -gt 0 ]; then
     exit 1
 fi
 
-# 1. Generate SSH key pair for Ansible → agent access
 mkdir -p "$KEY_DIR"
+cd "$SCRIPT_DIR"
+
+# 1. Generate SSH key pair for Ansible → agent access
 if [ ! -f "$KEY_DIR/ansible_ed25519" ]; then
-    echo "[1/3] Generating SSH key pair..."
+    echo "[1/4] Generating SSH key pair..."
     ssh-keygen -t ed25519 -f "$KEY_DIR/ansible_ed25519" -N "" -C "ansible-test-autoupdate"
 else
-    echo "[1/3] SSH key pair already exists, skipping."
+    echo "[1/4] SSH key pair already exists, skipping."
 fi
 
-# 2. Build and start containers
-cd "$SCRIPT_DIR"
+# 2. Start master + supporting services; agents come later (need PKI tickets first)
 if $FORCE_BUILD; then
-    echo "[2/3] Building and starting containers (forced rebuild)..."
-    podman compose up -d --build
+    echo "[2/4] Building and starting master + support services (forced rebuild)..."
+    podman compose up -d --build icinga-master redis mariadb icingadb icingaweb2
 else
-    echo "[2/3] Starting containers (building images only if not cached)..."
-    podman compose up -d
+    echo "[2/4] Starting master + support services..."
+    podman compose up -d icinga-master redis mariadb icingadb icingaweb2
 fi
 
-# 3. Wait for Icinga2 API to become healthy
-echo "[3/3] Waiting for Icinga2 API to be ready..."
+# 3. Wait for Icinga2 API, then generate per-agent PKI tickets
+echo "[3/4] Waiting for Icinga2 API to be ready..."
 MAX_WAIT=120
 ELAPSED=0
 until curl -sk -u "autoupdate:Pain-Frequently-Mother-Sun3-Instead" \
@@ -85,13 +86,33 @@ until curl -sk -u "autoupdate:Pain-Frequently-Mother-Sun3-Instead" \
     ELAPSED=$((ELAPSED + 5))
 done
 
+echo "      Generating Icinga2 PKI tickets for agents..."
+for agent in agent1 agent2; do
+    podman exec autoupdate_icinga-master \
+        icinga2 pki ticket --cn "$agent" \
+        > "$KEY_DIR/${agent}.ticket"
+    echo "      Ticket for $agent written to keys/${agent}.ticket"
+done
+
+# 4. Start agents (they read their ticket on first boot via setup-icinga-agent.service)
+if $FORCE_BUILD; then
+    echo "[4/4] Starting agent containers (forced rebuild)..."
+    podman compose up -d --build agent1 agent2
+else
+    echo "[4/4] Starting agent containers..."
+    podman compose up -d agent1 agent2
+fi
+
 echo ""
 echo "=== Environment ready ==="
 echo ""
+echo "Agents connect to the master and run icinga2 node setup on first boot."
+echo "Allow ~30 s for agents to appear as UP in Icinga."
+echo ""
 echo "Next steps (run from project root):"
 echo ""
-echo "  # Simulate CRITICAL apt service on both agents:"
-echo "  ansible-playbook -i testing/inventory.yml testing/simulate-critical.yml"
+echo "  # Check service states (agents run real check_apt + check_needrestart):"
+echo "  i2 -k services"
 echo ""
 echo "  # Run the autoupdate playbook against the test environment:"
 echo "  source ansible-venv/bin/activate"
@@ -104,4 +125,4 @@ echo "  # Limit to one agent:"
 echo "  ansible-playbook -i testing/inventory.yml -l agent1 autoupdate.yml"
 echo ""
 echo "  # Tear down:"
-echo "  cd testing && podman compose down"
+echo "  bash testing/teardown.sh"

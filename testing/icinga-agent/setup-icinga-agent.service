@@ -1,0 +1,13 @@
+[Unit]
+Description=Icinga2 agent PKI setup
+After=network.target
+# Must complete before icinga2.service starts so the certs are in place
+Before=icinga2.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/setup-icinga-agent.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

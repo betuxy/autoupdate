@@ -1,0 +1,17 @@
+[Unit]
+Description=Regenerate SSH host keys and install Ansible authorized key
+Before=ssh.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+ExecStart=/bin/bash -c \
+    'if [ -f /tmp/ansible_key.pub ]; then \
+        install -m 600 -o ansible -g ansible \
+            /tmp/ansible_key.pub \
+            /home/ansible/.ssh/authorized_keys; \
+    fi'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -14,6 +14,11 @@ services:
       - ./icinga-master/conf/icingaweb2-api-user.conf:/data/etc/icinga2/conf.d/icingaweb2-api-user.conf:ro
       - ./icinga-master/conf/hosts.conf:/data/etc/icinga2/conf.d/hosts.conf:ro
       - ./icinga-master/conf/icingadb.conf:/data/etc/icinga2/conf.d/icingadb.conf:ro
+      - ./icinga-master/conf/services.conf:/data/etc/icinga2/conf.d/services.conf:ro
+      - ./icinga-master/conf/agents.conf:/data/etc/icinga2/conf.d/agents.conf:ro
+      - ./icinga-master/conf/check-commands.conf:/data/etc/icinga2/conf.d/check-commands.conf:ro
+    cap_add:
+      - NET_RAW
     networks:
       - icinga-test
     healthcheck:
@@ -128,6 +133,9 @@ services:
     networks:
       - icinga-test
     restart: always
+    tmpfs:
+      - /run
+      - /run/lock
     volumes:
       - ./keys/ansible_ed25519.pub:/tmp/ansible_key.pub:ro
 
@@ -140,13 +148,19 @@ services:
     networks:
       - icinga-test
     restart: always
+    tmpfs:
+      - /run
+      - /run/lock
     volumes:
       - ./keys/ansible_ed25519.pub:/tmp/ansible_key.pub:ro
 
 volumes:
   icinga-master-data:
+    name: autoupdate_icinga-master-data
   mariadb-data:
+    name: autoupdate_mariadb-data
   icingaweb2-data:
+    name: autoupdate_icingaweb2-data
 
 networks:
   icinga-test:
