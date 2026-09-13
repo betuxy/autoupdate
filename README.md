@@ -15,10 +15,11 @@ run                      # simulate CRITICALs + run the playbook against them
 
 The `.profile` in the project root defines two aliases:
 
-| Alias | Expands to |
+| Alias / function | Expands to |
 |---|---|
 | `i2` | `i2 --user autoupdate --password … -k` — pre-authenticated Icinga2 CLI, no flags needed |
-| `run` | `ap testing/simulate-critical.yml && ap -i testing/inventory.yml autoupdate.yml` — one command to trigger CRITICALs and run a full update cycle |
+| `run` | Simulate CRITICALs on both agents, then run a full update cycle against the test inventory |
+| `run1 agent1` | Simulate CRITICALs on `agent1` only, then update only `agent1` |
 
 ## Setup facts
 
@@ -173,10 +174,9 @@ source ansible-venv/bin/activate
 ansible-playbook autoupdate.yml
 
 # Limit to specific hosts (intersected with Icinga results)
-ansible-playbook -l webserver1,webserver2 autoupdate.yml
-
-# Limit to an inventory group
-ansible-playbook -l webservers autoupdate.yml
+# Limit to specific hosts (intersected with Icinga results)
+ansible-playbook -i inventory.yml autoupdate.yml -l webserver1
+ansible-playbook -i inventory.yml autoupdate.yml -l webserver1,webserver2
 
 # Dry run — shows which hosts would be updated and what packages are pending
 ansible-playbook --check autoupdate.yml

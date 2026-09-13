@@ -1,11 +1,13 @@
 ---
 - name: Autoupdate | Gather hosts needing update from Icinga
-  hosts: localhost
+  hosts: all
   gather_facts: false
 
   tasks:
-    - name: Autoupdate | Query Icinga for critical apt/needrestart services
+    - name: Autoupdate | Query Icinga for critical apt/needrestart services  # noqa: run-once
       ansible.builtin.import_tasks: tasks/autoupdate/01-query-icinga.yml
+      run_once: true
+      delegate_to: localhost
 
 - name: Autoupdate | Verify host reachability
   hosts: needs_update
@@ -17,12 +19,14 @@
       ansible.builtin.import_tasks: tasks/autoupdate/02-check-reachability.yml
 
 - name: Autoupdate | Report unreachable hosts and finalize update queue
-  hosts: localhost
+  hosts: all
   gather_facts: false
 
   tasks:
-    - name: Autoupdate | Report unreachable hosts
+    - name: Autoupdate | Report unreachable hosts  # noqa: run-once
       ansible.builtin.import_tasks: tasks/autoupdate/03-report-unreachable.yml
+      run_once: true
+      delegate_to: localhost
 
 - name: Autoupdate | Update and reboot hosts
   hosts: reachable_for_update

@@ -16,7 +16,7 @@
     _target_hosts: "{{ (sim_hosts | default('agent1,agent2')).split(',') }}"
 
   tasks:
-    - name: Test | Set apt service to CRITICAL on {{ item }}
+    - name: Test | Set apt service to CRITICAL
       ansible.builtin.uri:
         url: "{{ icinga_api_url }}/v1/actions/process-check-result"
         method: POST
