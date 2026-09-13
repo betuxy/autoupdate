@@ -32,12 +32,15 @@
   tasks:
     - name: Autoupdate | Schedule Icinga downtime
       ansible.builtin.import_tasks: tasks/autoupdate/04-set-downtime.yml
+      when: autoupdate_icinga_enabled | default(true)
 
     - name: Autoupdate | Run apt upgrade and reboot
       ansible.builtin.import_tasks: tasks/autoupdate/05-update-reboot.yml
 
     - name: Autoupdate | Verify monitoring recovery
       ansible.builtin.import_tasks: tasks/autoupdate/06-check-recovery.yml
+      when: autoupdate_icinga_enabled | default(true)
 
     - name: Autoupdate | Remove Icinga downtime
       ansible.builtin.import_tasks: tasks/autoupdate/07-remove-downtime.yml
+      when: autoupdate_icinga_enabled | default(true)

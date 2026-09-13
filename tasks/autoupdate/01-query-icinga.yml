@@ -62,6 +62,8 @@
   ansible.builtin.add_host:
     name: "{{ item }}"
     groups: needs_update
+    ansible_host: "{{ hostvars[item].ansible_host | default(item) }}"
+    ansible_port: "{{ hostvars[item].ansible_port | default(omit) }}"
   loop: "{{ _needs_update_hosts }}"
   changed_when: false
   check_mode: false

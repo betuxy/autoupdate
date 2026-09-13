@@ -28,6 +28,8 @@
   ansible.builtin.add_host:
     name: "{{ inventory_hostname }}"
     groups: reachable_for_update
+    ansible_host: "{{ ansible_host | default(inventory_hostname) }}"
+    ansible_port: "{{ ansible_port | default(omit) }}"
   changed_when: false
   check_mode: false
 

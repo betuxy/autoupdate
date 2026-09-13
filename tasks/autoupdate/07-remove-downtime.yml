@@ -15,7 +15,7 @@
       filter: >-
         downtime.host_name == "{{ inventory_hostname }}" &&
         downtime.author == "{{ icinga_downtime_author }}"
-    status_code: 200
+    status_code: [200, 404]
   delegate_to: localhost
   no_log: "{{ icinga_api_no_log }}"
   when: not ansible_check_mode

@@ -68,12 +68,14 @@ COPY setup-icinga-agent.sh      /usr/local/sbin/setup-icinga-agent.sh
 RUN chmod +x /usr/local/sbin/setup-icinga-agent.sh \
     && systemctl enable setup-ansible-key.service setup-icinga-agent.service icinga2.service
 
-# Override reboot/shutdown: kill PID 1 so Docker restart policy brings the container back up.
-# Systemd handles SIGTERM as a controlled shutdown, which exits the container cleanly.
+# Override reboot/shutdown: use systemctl poweroff so systemd runs its halt sequence,
+# exits cleanly, and Docker/Podman restart policy brings the container back up.
+# SIGTERM (kill 1) does NOT cause poweroff in a systemd container — it switches to
+# rescue mode. STOPSIGNAL is SIGRTMIN+3 (halt), but from inside we use systemctl.
 # /sbin/reboot and /sbin/shutdown are symlinks to systemctl (multi-call binary) — remove
 # them first so `tee` doesn't write through the symlink and clobber the real systemctl.
 RUN rm -f /sbin/reboot /sbin/shutdown \
-    && printf '#!/bin/sh\nkill 1\n' | tee /sbin/reboot /sbin/shutdown > /dev/null \
+    && printf '#!/bin/sh\nsystemctl poweroff\n' | tee /sbin/reboot /sbin/shutdown > /dev/null \
     && chmod +x /sbin/reboot /sbin/shutdown
 
 EXPOSE 22 5665

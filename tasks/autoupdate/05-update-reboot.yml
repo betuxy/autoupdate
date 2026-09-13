@@ -65,12 +65,44 @@
   delegate_to: localhost
   when: not ansible_check_mode
 
+- name: 05-update-reboot | Detect containerized target (systemd-detect-virt)
+  ansible.builtin.command: systemd-detect-virt --container
+  register: autoupdate_virt_check
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: 05-update-reboot | Detect containerized target (cgroup fallback)
+  ansible.builtin.slurp:
+    src: /proc/1/cgroup
+  register: autoupdate_cgroup_check
+  failed_when: false
+  become: true
+
+- name: 05-update-reboot | Set container-aware reboot facts
+  ansible.builtin.set_fact:
+    autoupdate_is_container: >-
+      {{ autoupdate_virt_check.rc == 0
+         or (ansible_facts.virtualization_type | default('')) in ['docker', 'container', 'lxc', 'podman']
+         or (autoupdate_cgroup_check.content is defined and
+             (autoupdate_cgroup_check.content | b64decode) is search('docker|containerd|kubepods|lxc')) }}
+
+- name: 05-update-reboot | Resolve reboot/boot-detection commands
+  ansible.builtin.set_fact:
+    autoupdate_resolved_reboot_command: >-
+      {{ autoupdate_reboot_command | default(omit, true) if not autoupdate_is_container
+         else autoupdate_reboot_command | default('systemctl reboot || (kill -TERM 1; sleep 1; kill -KILL 1)', true) }}
+    autoupdate_resolved_boot_time_command: >-
+      {{ autoupdate_boot_time_command | default(omit, true) if not autoupdate_is_container
+         else autoupdate_boot_time_command | default('stat -c %Y /proc/1', true) }}
+
 - name: 05-update-reboot | Reboot host
   ansible.builtin.reboot:
     reboot_timeout: "{{ autoupdate_reboot_timeout }}"
     msg: Rebooting for system updates
     pre_reboot_delay: "{{ autoupdate_pre_reboot_delay }}"
-    boot_time_command: "{{ autoupdate_boot_time_command | default(omit) }}"
+    reboot_command: "{{ autoupdate_resolved_reboot_command }}"
+    boot_time_command: "{{ autoupdate_resolved_boot_time_command }}"
   become: true
 
 - name: 05-update-reboot | Log host back online

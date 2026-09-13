@@ -38,6 +38,14 @@
   no_log: "{{ icinga_api_no_log }}"
   when: not ansible_check_mode
 
+- name: 04-set-downtime | Assert downtime was created for host
+  ansible.builtin.assert:
+    that: _downtime_result.json.results | length > 0
+    fail_msg: >-
+      schedule-downtime matched 0 objects for '{{ inventory_hostname }}' —
+      verify the host exists in Icinga or set autoupdate_icinga_enabled: false
+  when: not ansible_check_mode
+
 - name: 04-set-downtime | Log downtime scheduled
   ansible.builtin.lineinfile:
     path: "{{ autoupdate_log_path }}"

@@ -8,6 +8,9 @@ icinga_api_validate_certs: false
 # Set to true to suppress API credentials from logs
 icinga_api_no_log: false
 
+# Set to false for hosts not monitored in Icinga — skips downtime tasks entirely
+autoupdate_icinga_enabled: true
+
 # Downtime scheduling
 icinga_downtime_duration: 7200
 icinga_downtime_author: ansible
