@@ -5,6 +5,29 @@ verifies each host is actually reachable (guards against stale/satellite-down re
 then updates and reboots each reachable host one at a time, waiting for full monitoring
 recovery before moving to the next. All steps are appended to a persistent log file.
 
+## Quick start
+
+```bash
+source .profile          # load aliases (see below)
+bash testing/setup.sh    # spin up test environment
+run                      # simulate CRITICALs + run the playbook against them
+```
+
+The `.profile` in the project root defines two aliases:
+
+| Alias | Expands to |
+|---|---|
+| `i2` | `i2 --user autoupdate --password … -k` — pre-authenticated Icinga2 CLI, no flags needed |
+| `run` | `ap testing/simulate-critical.yml && ap -i testing/inventory.yml autoupdate.yml` — one command to trigger CRITICALs and run a full update cycle |
+
+## Setup facts
+
+- **One host at a time.** The update play runs `serial: 1` — each host is fully updated, rebooted, and confirmed healthy in Icinga before the next one starts.
+- **Icinga-optional.** Hosts with `autoupdate_icinga_enabled: false` are updated and rebooted without touching the Icinga API — downtime scheduling and recovery polling are skipped entirely.
+- **Container-aware reboots.** The reboot task detects containerized targets via `systemd-detect-virt` and cgroup inspection, substituting a container-safe reboot command and a PID-1-based boot-time probe instead of the kernel's boot ID.
+- **Check mode shows pending packages.** `--check` runs the Icinga query, SSH probe, apt cache refresh, and `apt-get --simulate` but skips every write — you get a full picture of what *would* change without touching anything.
+- **Recovery wait is up to ~31 min.** After reboot, the playbook forces Icinga rechecks, waits `autoupdate_recheck_delay` (30 s) for checks to execute, then polls every `autoupdate_recovery_delay` (60 s) for up to `autoupdate_recovery_retries` (30) attempts before failing. If it times out, the downtime is left active for manual investigation.
+
 ## Flow
 
 ```
