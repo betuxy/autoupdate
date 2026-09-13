@@ -259,8 +259,8 @@ playbook acts on.
 | `redis` | `redis:7-alpine` | — | IcingaDB backend |
 | `icingadb` | `icinga/icingadb` | — | IcingaDB bridge |
 | `mariadb` | `mariadb:10.11` | — | Persistent storage |
-| `agent1` | custom Debian 13 | 2222 (SSH), 2224 (Icinga2) | Real Icinga2 agent |
-| `agent2` | custom Debian 13 | 2223 (SSH), 2225 (Icinga2) | Real Icinga2 agent |
+| `agent1` | custom Debian 13 | 2222 (SSH) | Real Icinga2 agent |
+| `agent2` | custom Debian 13 | 2223 (SSH) | Real Icinga2 agent |
 
 Each agent container runs systemd as PID 1 and hosts:
 - **Icinga2** in satellite mode, TLS-authenticated to the master via PKI certificates

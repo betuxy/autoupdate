@@ -70,7 +70,10 @@ RUN chmod +x /usr/local/sbin/setup-icinga-agent.sh \
 
 # Override reboot/shutdown: kill PID 1 so Docker restart policy brings the container back up.
 # Systemd handles SIGTERM as a controlled shutdown, which exits the container cleanly.
-RUN printf '#!/bin/sh\nkill 1\n' | tee /sbin/reboot /sbin/shutdown > /dev/null \
+# /sbin/reboot and /sbin/shutdown are symlinks to systemctl (multi-call binary) — remove
+# them first so `tee` doesn't write through the symlink and clobber the real systemctl.
+RUN rm -f /sbin/reboot /sbin/shutdown \
+    && printf '#!/bin/sh\nkill 1\n' | tee /sbin/reboot /sbin/shutdown > /dev/null \
     && chmod +x /sbin/reboot /sbin/shutdown
 
 EXPOSE 22 5665

@@ -138,6 +138,7 @@ services:
       - /run/lock
     volumes:
       - ./keys/ansible_ed25519.pub:/tmp/ansible_key.pub:ro
+      - ./keys/agent1.ticket:/tmp/icinga-ticket:ro
 
   agent2:
     build: ./icinga-agent
@@ -153,6 +154,7 @@ services:
       - /run/lock
     volumes:
       - ./keys/ansible_ed25519.pub:/tmp/ansible_key.pub:ro
+      - ./keys/agent2.ticket:/tmp/icinga-ticket:ro
 
 volumes:
   icinga-master-data:
