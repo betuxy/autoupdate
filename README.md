@@ -5,6 +5,37 @@ verifies each host is actually reachable (guards against stale/satellite-down re
 then updates and reboots each reachable host one at a time, waiting for full monitoring
 recovery before moving to the next. All steps are appended to a persistent log file.
 
+## Contents
+
+- [Quick start](#quick-start)
+- [Setup facts](#setup-facts)
+- [Flow](#flow)
+- [Why the reachability check?](#why-the-reachability-check)
+- [Container-aware reboots](#container-aware-reboots)
+- [Log file](#log-file)
+- [Usage](#usage)
+- [Check mode (dry run)](#check-mode-dry-run)
+- [Failure behaviour](#failure-behaviour)
+- [Variables](#variables)
+  - [Icinga2 API](#icinga2-api)
+  - [Downtime](#downtime)
+  - [Reachability](#reachability)
+  - [Update and reboot](#update-and-reboot)
+  - [Recovery polling](#recovery-polling)
+  - [Logging](#logging)
+- [Test environment](#test-environment)
+  - [Services](#services)
+  - [Quick start](#quick-start-1)
+  - [Check service states](#check-service-states)
+  - [Run the playbook against the test environment](#run-the-playbook-against-the-test-environment)
+  - [Teardown](#teardown)
+- [i2 — Icinga2 CLI](#i2--icinga2-cli)
+  - [Install](#install)
+  - [Commands](#commands)
+  - [Global flags](#global-flags)
+  - [services flags](#services-flags)
+  - [Shell completions](#shell-completions)
+
 ## Quick start
 
 ```bash
